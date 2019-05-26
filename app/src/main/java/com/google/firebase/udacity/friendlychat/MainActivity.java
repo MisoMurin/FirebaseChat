@@ -19,6 +19,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.support.design.widget.Snackbar;
 import android.support.v7.app.AppCompatActivity;
 import android.text.Editable;
 import android.text.InputFilter;
@@ -32,6 +33,7 @@ import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ListView;
 import android.widget.ProgressBar;
+import android.widget.RelativeLayout;
 
 import com.firebase.ui.auth.AuthUI;
 import com.google.firebase.auth.FirebaseAuth;
@@ -52,6 +54,7 @@ public class MainActivity extends AppCompatActivity {
     private static final int RC_SIGN_IN = 1404;
     public static final int DEFAULT_MSG_LENGTH_LIMIT = 1000;
 
+    private RelativeLayout rlMain;
     private ListView mMessageListView;
     private MessageAdapter messageAdapter;
     private ProgressBar mProgressBar;
@@ -77,6 +80,7 @@ public class MainActivity extends AppCompatActivity {
         dbMessagesReference = firebaseDb.getReference().child("messages");
 
         // Initialize references to views
+        rlMain = findViewById(R.id.rl_main);
         mProgressBar = findViewById(R.id.progressBar);
         mMessageListView = findViewById(R.id.messageListView);
         mPhotoPickerButton = findViewById(R.id.photoPickerButton);
@@ -214,6 +218,14 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == RC_SIGN_IN) {
+            if (resultCode == RESULT_OK) {
+                Snackbar.make(rlMain, R.string.signed_in, Snackbar.LENGTH_LONG).show();
+            } else if (resultCode == RESULT_CANCELED) {
+                Snackbar.make(rlMain, R.string.sign_in_cancelled, Snackbar.LENGTH_LONG).show();
+                finish();
+            }
+        }
     }
 
     @Override
