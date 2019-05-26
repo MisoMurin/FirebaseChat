@@ -47,21 +47,19 @@ import java.util.Arrays;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
-
     private static final String TAG = "MainActivity";
+    private static final String ANONYMOUS = "Anonymous";
     private static final int RC_SIGN_IN = 1404;
-
-    public static final String USERNAME = "Pavlinka";
     public static final int DEFAULT_MSG_LENGTH_LIMIT = 1000;
 
     private ListView mMessageListView;
-    private MessageAdapter mMessageAdapter;
+    private MessageAdapter messageAdapter;
     private ProgressBar mProgressBar;
     private ImageButton mPhotoPickerButton;
     private EditText mMessageEditText;
     private Button mSendButton;
 
-    private String mUsername;
+    private String username;
 
     private FirebaseDatabase firebaseDb;
     private DatabaseReference dbMessagesReference;
@@ -73,8 +71,6 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
-        mUsername = USERNAME;
 
         firebaseDb = FirebaseDatabase.getInstance();
         firebaseAuth = FirebaseAuth.getInstance();
@@ -89,8 +85,8 @@ public class MainActivity extends AppCompatActivity {
 
         // Initialize message ListView and its adapter
         List<FriendlyMessage> friendlyMessages = new ArrayList<>();
-        mMessageAdapter = new MessageAdapter(this, R.layout.item_message, friendlyMessages);
-        mMessageListView.setAdapter(mMessageAdapter);
+        messageAdapter = new MessageAdapter(this, R.layout.item_message, friendlyMessages);
+        mMessageListView.setAdapter(messageAdapter);
 
         // Initialize progress bar
         mProgressBar.setVisibility(ProgressBar.INVISIBLE);
@@ -130,7 +126,7 @@ public class MainActivity extends AppCompatActivity {
             public void onClick(View view) {
                 FriendlyMessage message = new FriendlyMessage(
                 	mMessageEditText.getText().toString(),
-	                mUsername,
+                    username,
 	                null
                 );
                 dbMessagesReference.push().setValue(message);
@@ -139,40 +135,67 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        childEventListener = new ChildEventListener() {
-	        @Override
-	        public void onChildAdded(@NonNull DataSnapshot dataSnapshot, @Nullable String s) {
-				FriendlyMessage message = dataSnapshot.getValue(FriendlyMessage.class);
-				mMessageAdapter.add(message);
-				mMessageAdapter.notifyDataSetChanged();
-	        }
-
-	        @Override
-	        public void onChildChanged(@NonNull DataSnapshot dataSnapshot, @Nullable String s) {}
-
-	        @Override
-	        public void onChildRemoved(@NonNull DataSnapshot dataSnapshot) {}
-
-	        @Override
-	        public void onChildMoved(@NonNull DataSnapshot dataSnapshot, @Nullable String s) {}
-
-	        @Override
-	        public void onCancelled(@NonNull DatabaseError databaseError) {}
-        };
-
-        dbMessagesReference.addChildEventListener(childEventListener);
-
         authStateListener = new FirebaseAuth.AuthStateListener() {
             @Override
             public void onAuthStateChanged(@NonNull FirebaseAuth firebaseAuth) {
                 FirebaseUser user = firebaseAuth.getCurrentUser();
                 if (user != null) {
                     // signed in
+                    onSignedIn(user.getDisplayName());
                 } else {
+                    onSignedOut();
                     startLogin();
                 }
             }
         };
+    }
+
+    private void onSignedIn(String username) {
+        this.username = username;
+        attachDatabaseReadListener();
+    }
+
+    private void attachDatabaseReadListener() {
+        if (childEventListener == null) {
+            childEventListener = new ChildEventListener() {
+                @Override
+                public void onChildAdded(@NonNull DataSnapshot dataSnapshot, @Nullable String s) {
+                    FriendlyMessage message = dataSnapshot.getValue(FriendlyMessage.class);
+                    messageAdapter.add(message);
+                    messageAdapter.notifyDataSetChanged();
+                }
+
+                @Override
+                public void onChildChanged(@NonNull DataSnapshot dataSnapshot, @Nullable String s) {
+                }
+
+                @Override
+                public void onChildRemoved(@NonNull DataSnapshot dataSnapshot) {
+                }
+
+                @Override
+                public void onChildMoved(@NonNull DataSnapshot dataSnapshot, @Nullable String s) {
+                }
+
+                @Override
+                public void onCancelled(@NonNull DatabaseError databaseError) {
+                }
+            };
+        }
+        dbMessagesReference.addChildEventListener(childEventListener);
+    }
+
+    private void onSignedOut() {
+        username = ANONYMOUS;
+        messageAdapter.clear();
+        detachDatabaseReadListener();
+    }
+
+    private void detachDatabaseReadListener() {
+        if (childEventListener != null) {
+            dbMessagesReference.removeEventListener(childEventListener);
+            childEventListener = null;
+        }
     }
 
     private void startLogin() {
@@ -202,7 +225,11 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onPause() {
         super.onPause();
-        firebaseAuth.removeAuthStateListener(authStateListener);
+        if (authStateListener != null) {
+            firebaseAuth.removeAuthStateListener(authStateListener);
+        }
+        detachDatabaseReadListener();
+        messageAdapter.clear();
     }
 
     @Override
