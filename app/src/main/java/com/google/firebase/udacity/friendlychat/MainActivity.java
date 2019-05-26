@@ -15,6 +15,7 @@
  */
 package com.google.firebase.udacity.friendlychat;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
@@ -32,6 +33,9 @@ import android.widget.ImageButton;
 import android.widget.ListView;
 import android.widget.ProgressBar;
 
+import com.firebase.ui.auth.AuthUI;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.ChildEventListener;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
@@ -39,11 +43,13 @@ import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "MainActivity";
+    private static final int RC_SIGN_IN = 1404;
 
     public static final String USERNAME = "Pavlinka";
     public static final int DEFAULT_MSG_LENGTH_LIMIT = 1000;
@@ -60,6 +66,8 @@ public class MainActivity extends AppCompatActivity {
     private FirebaseDatabase firebaseDb;
     private DatabaseReference dbMessagesReference;
     private ChildEventListener childEventListener;
+    private FirebaseAuth firebaseAuth;
+    private FirebaseAuth.AuthStateListener authStateListener;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -69,6 +77,7 @@ public class MainActivity extends AppCompatActivity {
         mUsername = USERNAME;
 
         firebaseDb = FirebaseDatabase.getInstance();
+        firebaseAuth = FirebaseAuth.getInstance();
         dbMessagesReference = firebaseDb.getReference().child("messages");
 
         // Initialize references to views
@@ -152,6 +161,48 @@ public class MainActivity extends AppCompatActivity {
         };
 
         dbMessagesReference.addChildEventListener(childEventListener);
+
+        authStateListener = new FirebaseAuth.AuthStateListener() {
+            @Override
+            public void onAuthStateChanged(@NonNull FirebaseAuth firebaseAuth) {
+                FirebaseUser user = firebaseAuth.getCurrentUser();
+                if (user != null) {
+                    // signed in
+                } else {
+                    startLogin();
+                }
+            }
+        };
+    }
+
+    private void startLogin() {
+        startActivityForResult(
+            AuthUI.getInstance()
+                .createSignInIntentBuilder()
+                .setIsSmartLockEnabled(false)
+                .setAvailableProviders(Arrays.asList(
+                    new AuthUI.IdpConfig.GoogleBuilder().build(),
+                    new AuthUI.IdpConfig.EmailBuilder().build()
+                )).build(),
+            RC_SIGN_IN
+        );
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        firebaseAuth.addAuthStateListener(authStateListener);
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        firebaseAuth.removeAuthStateListener(authStateListener);
     }
 
     @Override
