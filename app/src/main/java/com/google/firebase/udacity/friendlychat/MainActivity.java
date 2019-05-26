@@ -96,11 +96,8 @@ public class MainActivity extends AppCompatActivity {
         mProgressBar.setVisibility(ProgressBar.INVISIBLE);
 
         // ImagePickerButton shows an image picker to upload a image for a message
-        mPhotoPickerButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                // TODO: Fire an intent to show an image picker
-            }
+        mPhotoPickerButton.setOnClickListener(view -> {
+            // TODO: Fire an intent to show an image picker
         });
 
         // Enable Send button when there's text to send
@@ -125,31 +122,25 @@ public class MainActivity extends AppCompatActivity {
         mMessageEditText.setFilters(new InputFilter[]{new InputFilter.LengthFilter(DEFAULT_MSG_LENGTH_LIMIT)});
 
         // Send button sends a message and clears the EditText
-        mSendButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                FriendlyMessage message = new FriendlyMessage(
-                	mMessageEditText.getText().toString(),
-                    username,
-	                null
-                );
-                dbMessagesReference.push().setValue(message);
+        mSendButton.setOnClickListener(view -> {
+            FriendlyMessage message = new FriendlyMessage(
+                mMessageEditText.getText().toString(),
+                username,
+                null
+            );
+            dbMessagesReference.push().setValue(message);
 
-                mMessageEditText.setText("");
-            }
+            mMessageEditText.setText("");
         });
 
-        authStateListener = new FirebaseAuth.AuthStateListener() {
-            @Override
-            public void onAuthStateChanged(@NonNull FirebaseAuth firebaseAuth) {
-                FirebaseUser user = firebaseAuth.getCurrentUser();
-                if (user != null) {
-                    // signed in
-                    onSignedIn(user.getDisplayName());
-                } else {
-                    onSignedOut();
-                    startLogin();
-                }
+        authStateListener = firebaseAuth -> {
+            FirebaseUser user = firebaseAuth.getCurrentUser();
+            if (user != null) {
+                // signed in
+                onSignedIn(user.getDisplayName());
+            } else {
+                onSignedOut();
+                startLogin();
             }
         };
     }
