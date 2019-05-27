@@ -16,6 +16,7 @@
 package com.google.firebase.udacity.friendlychat;
 
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
@@ -27,7 +28,6 @@ import android.text.TextWatcher;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
-import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
@@ -36,6 +36,9 @@ import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 
 import com.firebase.ui.auth.AuthUI;
+import com.google.android.gms.tasks.Continuation;
+import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.ChildEventListener;
@@ -43,6 +46,9 @@ import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.storage.FirebaseStorage;
+import com.google.firebase.storage.StorageReference;
+import com.google.firebase.storage.UploadTask;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -52,6 +58,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
     private static final String ANONYMOUS = "Anonymous";
     private static final int RC_SIGN_IN = 1404;
+    private static final int RC_PHOTO_PICKER = 1231;
     public static final int DEFAULT_MSG_LENGTH_LIMIT = 1000;
 
     private RelativeLayout rlMain;
@@ -69,6 +76,8 @@ public class MainActivity extends AppCompatActivity {
     private ChildEventListener childEventListener;
     private FirebaseAuth firebaseAuth;
     private FirebaseAuth.AuthStateListener authStateListener;
+    private FirebaseStorage firebaseStorage;
+    private StorageReference storageReference;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -77,7 +86,9 @@ public class MainActivity extends AppCompatActivity {
 
         firebaseDb = FirebaseDatabase.getInstance();
         firebaseAuth = FirebaseAuth.getInstance();
+        firebaseStorage = FirebaseStorage.getInstance();
         dbMessagesReference = firebaseDb.getReference().child("messages");
+        storageReference = firebaseStorage.getReference().child("chat_photos");
 
         // Initialize references to views
         rlMain = findViewById(R.id.rl_main);
@@ -143,6 +154,16 @@ public class MainActivity extends AppCompatActivity {
                 startLogin();
             }
         };
+
+        mPhotoPickerButton.setOnClickListener(view -> {
+            Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+            intent.setType("image/jpeg");
+            intent.putExtra(Intent.EXTRA_LOCAL_ONLY, true);
+            startActivityForResult(
+                Intent.createChooser(intent, "Complete action using"),
+                RC_PHOTO_PICKER
+            );
+        });
     }
 
     private void onSignedIn(String username) {
@@ -215,6 +236,38 @@ public class MainActivity extends AppCompatActivity {
             } else if (resultCode == RESULT_CANCELED) {
                 Snackbar.make(rlMain, R.string.sign_in_cancelled, Snackbar.LENGTH_LONG).show();
                 finish();
+            }
+        } else if (requestCode == RC_PHOTO_PICKER) {
+            if (resultCode == RESULT_OK) {
+                if (data != null) {
+                    Uri selectedImageUri = data.getData();
+                    if (selectedImageUri != null) {
+                        String photoName = selectedImageUri.getLastPathSegment();
+                        if (photoName != null) {
+                            StorageReference photoRef = storageReference.child(photoName);
+                            UploadTask uploadTask = photoRef.putFile(selectedImageUri);
+                            uploadTask.continueWithTask(task -> {
+                                if (!task.isSuccessful()) {
+                                    return null;
+                                } else {
+                                    return photoRef.getDownloadUrl();
+                                }
+                            }).addOnCompleteListener(task -> {
+                                if (task.isSuccessful()) {
+                                    Uri downloadUri = task.getResult();
+                                    if (downloadUri != null) {
+                                        FriendlyMessage message =
+                                            new FriendlyMessage(null, username, downloadUri.toString());
+                                        dbMessagesReference.push().setValue(message);
+                                    }
+                                } else {
+                                    // Handle failures
+                                    // ...
+                                }
+                            });
+                        }
+                    }
+                }
             }
         }
     }
