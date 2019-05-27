@@ -25,6 +25,7 @@ import android.support.v7.app.AppCompatActivity;
 import android.text.Editable;
 import android.text.InputFilter;
 import android.text.TextWatcher;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -36,9 +37,6 @@ import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 
 import com.firebase.ui.auth.AuthUI;
-import com.google.android.gms.tasks.Continuation;
-import com.google.android.gms.tasks.OnCompleteListener;
-import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.ChildEventListener;
@@ -46,20 +44,26 @@ import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.remoteconfig.FirebaseRemoteConfig;
+import com.google.firebase.remoteconfig.FirebaseRemoteConfigSettings;
 import com.google.firebase.storage.FirebaseStorage;
 import com.google.firebase.storage.StorageReference;
 import com.google.firebase.storage.UploadTask;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
     private static final String ANONYMOUS = "Anonymous";
     private static final int RC_SIGN_IN = 1404;
     private static final int RC_PHOTO_PICKER = 1231;
-    public static final int DEFAULT_MSG_LENGTH_LIMIT = 1000;
+
+    private static final String MAX_MESSAGE_LENGTH = "max_message_length";
+    public static final int DEFAULT_MAX_MSG_LENGTH_LIMIT = 100;
 
     private RelativeLayout rlMain;
     private ListView mMessageListView;
@@ -78,6 +82,7 @@ public class MainActivity extends AppCompatActivity {
     private FirebaseAuth.AuthStateListener authStateListener;
     private FirebaseStorage firebaseStorage;
     private StorageReference storageReference;
+    private FirebaseRemoteConfig firebaseRemoteConfig;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -87,6 +92,7 @@ public class MainActivity extends AppCompatActivity {
         firebaseDb = FirebaseDatabase.getInstance();
         firebaseAuth = FirebaseAuth.getInstance();
         firebaseStorage = FirebaseStorage.getInstance();
+        firebaseRemoteConfig = FirebaseRemoteConfig.getInstance();
         dbMessagesReference = firebaseDb.getReference().child("messages");
         storageReference = firebaseStorage.getReference().child("chat_photos");
 
@@ -130,7 +136,7 @@ public class MainActivity extends AppCompatActivity {
             public void afterTextChanged(Editable editable) {
             }
         });
-        mMessageEditText.setFilters(new InputFilter[]{new InputFilter.LengthFilter(DEFAULT_MSG_LENGTH_LIMIT)});
+        mMessageEditText.setFilters(new InputFilter[]{new InputFilter.LengthFilter(DEFAULT_MAX_MSG_LENGTH_LIMIT)});
 
         // Send button sends a message and clears the EditText
         mSendButton.setOnClickListener(view -> {
@@ -164,6 +170,44 @@ public class MainActivity extends AppCompatActivity {
                 RC_PHOTO_PICKER
             );
         });
+
+        FirebaseRemoteConfigSettings configSettings =
+            new FirebaseRemoteConfigSettings.Builder()
+                .setDeveloperModeEnabled(BuildConfig.DEBUG)
+                .build();
+
+        firebaseRemoteConfig.setConfigSettingsAsync(configSettings);
+
+        Map<String, Object> defaultConfigMap = new HashMap<>();
+        defaultConfigMap.put(MAX_MESSAGE_LENGTH, DEFAULT_MAX_MSG_LENGTH_LIMIT);
+
+        fetchConfig();
+    }
+
+    private void fetchConfig() {
+        long cacheExpiration = 3600;
+
+        if (firebaseRemoteConfig.getInfo().getConfigSettings().isDeveloperModeEnabled()) {
+            cacheExpiration = 0;
+        }
+        firebaseRemoteConfig
+            .fetch(cacheExpiration)
+            .addOnSuccessListener(aVoid -> {
+                firebaseRemoteConfig.activate();
+                applyRetrievedConfig();
+            })
+            .addOnFailureListener(e -> {
+                Log.d("mmFriendlyChat", "Error retrieving the remote config.");
+                applyRetrievedConfig();
+            });
+    }
+
+    private void applyRetrievedConfig() {
+        Long messageLength = firebaseRemoteConfig.getLong(MAX_MESSAGE_LENGTH);
+        mMessageEditText.setFilters(
+            new InputFilter[] { new InputFilter.LengthFilter(messageLength.intValue()) }
+        );
+        Log.d("mmFriendlyChat", "Max message length set from remote config: " + messageLength);
     }
 
     private void onSignedIn(String username) {
